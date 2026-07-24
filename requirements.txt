@@ -1,0 +1,5 @@
+streamlit
+streamlit-searchbox
+numpy
+pandas
+scikit-learn
