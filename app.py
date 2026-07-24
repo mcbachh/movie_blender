@@ -226,7 +226,12 @@ else:
                     continue
                 inner_iid = raw_to_inner[raw_id]
                 input_inner_iids.append(inner_iid)
-                vectors.append(qi[inner_iid])
+                row = qi[inner_iid]
+                # qi may now be a sparse matrix (hybrid SVD + content vectors) —
+                # densify just this one row; qi as a whole stays sparse below.
+                if hasattr(row, "toarray"):
+                    row = row.toarray().ravel()
+                vectors.append(row)
                 weights.append(w / total_weight)
 
             if skipped:
