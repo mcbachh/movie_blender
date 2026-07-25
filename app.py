@@ -20,10 +20,26 @@ def load_artifacts():
 @st.cache_data
 def get_title_lookup(_movies_df):
     movies_df = _movies_df.drop_duplicates(subset="movieId").reset_index(drop=True)
-    title_to_id = dict(zip(movies_df["title"], movies_df["movieId"]))
-    id_to_title = dict(zip(movies_df["movieId"], movies_df["title"]))
-    all_titles = sorted(title_to_id.keys())
-    return title_to_id, id_to_title, all_titles
+    label_to_id = {}
+    id_to_label = {}
+
+    for _, row in movies_df.iterrows():
+        year = row.get("release_year")
+        if pd.isna(year) or year in (None, "", "None"):
+            label = str(row["title"])
+        else:
+            label = f"{row['title']} ({int(float(year))})"
+
+        # In the rare case two movies land on the exact same "Title (Year)"
+        # label, disambiguate with the movie id so both stay individually selectable.
+        if label in label_to_id:
+            label = f"{label} [id:{row['movieId']}]"
+
+        label_to_id[label] = row["movieId"]
+        id_to_label[row["movieId"]] = label
+
+    all_labels = sorted(label_to_id.keys())
+    return label_to_id, id_to_label, all_labels
 
 
 @st.cache_data(show_spinner=False)
@@ -50,12 +66,13 @@ artifacts = load_artifacts()
 qi = artifacts["qi"]  # item factor matrix, shape (n_items, n_factors)
 raw_to_inner = artifacts["raw_to_inner"]
 inner_to_raw = artifacts["inner_to_raw"]
-title_to_id, id_to_title, all_titles = get_title_lookup(artifacts["movies_df"])
+title_to_id, id_to_title, all_titles = get_title_lookup(artifacts["movies_df"])  # values are "Title (Year)" labels
 
-st.title("🎬 Movie Blender")
+st.title("Movie Blender")
 st.write(
-    "Add movies, adjust how much each one should influence the result, "
-    "and get recommendations blended from all of them."
+    "Everyone wants to watch something different on movie night? "
+    "This website allows you to get movie recommendations from multiple input movies, making picking what to watch so much easier! "
+    "Select at least one movie to get started."
 )
 
 if not st.secrets.get("TMDB_API_KEY"):
@@ -78,18 +95,49 @@ def number_key(movie_id):
 
 
 def set_weight(movie_id, value):
+    value = round(value, 4)
     st.session_state[weight_key(movie_id)] = value
     st.session_state[slider_key(movie_id)] = value
     st.session_state[number_key(movie_id)] = value
 
 
 def rebalance_weights():
+    """Even split across all selected movies. Used when adding/removing a movie."""
     n = len(st.session_state.selected)
     if n == 0:
         return
     even = round(1.0 / n, 4)
     for m in st.session_state.selected:
         set_weight(m["movieId"], even)
+
+
+def redistribute_others(changed_id, new_value):
+    """
+    Keep weights always summing to 1: when one movie's weight is set to
+    new_value, scale every other movie's weight proportionally so the
+    remainder (1 - new_value) is split across them in the same ratio
+    they already had relative to each other.
+    """
+    new_value = max(0.0, min(1.0, new_value))
+    others = [m for m in st.session_state.selected if m["movieId"] != changed_id]
+
+    if not others:
+        set_weight(changed_id, 1.0)
+        return
+
+    remaining = 1.0 - new_value
+    others_total = sum(st.session_state.get(weight_key(m["movieId"]), 0.0) for m in others)
+
+    if others_total <= 0:
+        even = remaining / len(others)
+        for m in others:
+            set_weight(m["movieId"], even)
+    else:
+        for m in others:
+            old = st.session_state.get(weight_key(m["movieId"]), 0.0)
+            set_weight(m["movieId"], remaining * (old / others_total))
+
+    set_weight(changed_id, new_value)
 
 
 def add_movie(title):
@@ -116,17 +164,13 @@ def remove_movie(movie_id):
 def sync_from_slider(movie_id):
     if slider_key(movie_id) not in st.session_state:
         return
-    val = st.session_state[slider_key(movie_id)]
-    st.session_state[number_key(movie_id)] = val
-    st.session_state[weight_key(movie_id)] = val
+    redistribute_others(movie_id, st.session_state[slider_key(movie_id)])
 
 
 def sync_from_number(movie_id):
     if number_key(movie_id) not in st.session_state:
         return
-    val = st.session_state[number_key(movie_id)]
-    st.session_state[slider_key(movie_id)] = val
-    st.session_state[weight_key(movie_id)] = val
+    redistribute_others(movie_id, st.session_state[number_key(movie_id)])
 
 
 # --- Search / add ---
@@ -175,7 +219,7 @@ else:
             if poster_url:
                 st.image(poster_url, width=60)
             else:
-                st.write("🎬")
+                st.write("[POSTER MISSING]")
 
         with title_col:
             st.write(f"**{m['title']}**")
@@ -188,6 +232,7 @@ else:
                 on_change=sync_from_slider, args=(mid,),
                 label_visibility="collapsed",
             )
+            st.caption("Adjust how much this movie will impact the recommendations.")
 
         with num_col:
             st.number_input(
@@ -199,11 +244,9 @@ else:
             )
 
         with remove_col:
-            if st.button("✕", key=f"remove_{mid}"):
-                remove_movie(mid)
-                st.rerun()
+            st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
 
-    st.caption("Weights are relative — they don't need to add up to 1, they'll be normalized automatically. Use the slider or type an exact number.")
+    st.caption("Weights always add up to 1 — changing one automatically rebalances the others.")
 
     n_recs = st.slider("Number of recommendations", min_value=5, max_value=25, value=10)
 
@@ -269,7 +312,7 @@ else:
                             if poster_url:
                                 st.image(poster_url, width=60)
                             else:
-                                st.write("🎬")
+                                st.write("[POSTER MISSING]")
                         with rec_text_col:
                             st.write(f"**{title}**")
                             st.caption(f"similarity: {score:.3f}")
