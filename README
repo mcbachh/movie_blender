@@ -1,0 +1,29 @@
+7/27/26
+Name: Michael Bachman
+Project: Movie Blender
+
+Recommendations are made by averaging weighted vector embeddings of each movie
+and finding the N closest movies (by cosine similarity) to the resulting average
+vector.
+
+Embeddings were created by training a latent-factor model with 50 factors. 
+Each movie's metadata was added to the embedding vector as well, by creating a countvectorized soup
+of the director (weighted 2x), writers, keywords (weighted 2x), and genres (weighted 7x). 
+Lastly, the popularity and average rating of each movie are added to the vector. 
+
+Notes:
+- Used the MovieLens latest rating dataset, containing ~33,000,000 ratings. This
+dataset only has info on movies up to 2023, so all recent movies are not included
+in this project.
+- All other movie information was gathered from TMDB
+
+This website is the result of my 2026 summer project. Other documentation on this
+project and my early experimentation with recommendation systems can be found at 
+these two notebooks:
+
+Intial Notebook:
+https://colab.research.google.com/drive/122Nx1q9xIRQCeUKvi98xsZrZ4rdLoV_B?authuser=3#scrollTo=D-XU3gn3mABo
+
+Movie Blender Notebook:
+https://colab.research.google.com/drive/1AKSp36a5-Vz84awLjR2AqPBlZ--1ijxe?authuser=3#scrollTo=k4O-SWmsYCua
+

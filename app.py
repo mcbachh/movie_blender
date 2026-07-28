@@ -8,6 +8,25 @@ from streamlit_searchbox import st_searchbox
 
 st.set_page_config(page_title="Movie Blender", page_icon="🎬", layout="centered")
 
+# By default, Streamlit's st.columns() stacks into full-width rows on narrow
+# (mobile) screens, which is why posters end up alone on their own line.
+# This forces columns to stay side-by-side at any screen width instead.
+st.markdown(
+    """
+    <style>
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+    }
+    div[data-testid="column"], div[data-testid="stColumn"] {
+        min-width: 0 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w200"
 
 
@@ -212,7 +231,7 @@ else:
         if weight_key(mid) not in st.session_state:
             set_weight(mid, 1.0)  # fallback, normally set by rebalance_weights
 
-        poster_col, title_col, slider_col, num_col, remove_col = st.columns([1, 3, 3, 1.3, 0.6])
+        poster_col, content_col = st.columns([1, 4])
 
         with poster_col:
             poster_url = get_poster_url(mid)
@@ -221,34 +240,35 @@ else:
             else:
                 st.write("[POSTER MISSING]")
 
-        with title_col:
+        with content_col:
             st.write(f"**{m['title']}**")
+            slider_col, num_col, remove_col = st.columns([3, 1.3, 0.6])
 
-        with slider_col:
-            st.slider(
-                f"Weight slider — {m['title']}",
-                min_value=0.0, max_value=1.0, step=0.01,
-                key=slider_key(mid),
-                on_change=sync_from_slider, args=(mid,),
-                label_visibility="collapsed",
-            )
-            st.caption("Adjust how much this movie will impact the recommendations.")
+            with slider_col:
+                st.slider(
+                    f"Weight slider — {m['title']}",
+                    min_value=0.0, max_value=1.0, step=0.01,
+                    key=slider_key(mid),
+                    on_change=sync_from_slider, args=(mid,),
+                    label_visibility="collapsed",
+                )
+                st.caption("Adjust how much this movie will impact the recommendations.")
 
-        with num_col:
-            st.number_input(
-                f"Weight number — {m['title']}",
-                min_value=0.0, max_value=1.0, step=0.01,
-                key=number_key(mid),
-                on_change=sync_from_number, args=(mid,),
-                label_visibility="collapsed",
-            )
+            with num_col:
+                st.number_input(
+                    f"Weight number — {m['title']}",
+                    min_value=0.0, max_value=1.0, step=0.01,
+                    key=number_key(mid),
+                    on_change=sync_from_number, args=(mid,),
+                    label_visibility="collapsed",
+                )
 
-        with remove_col:
-            st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
+            with remove_col:
+                st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
 
     st.caption("Weights always add up to 1 — changing one automatically rebalances the others.")
 
-    n_recs = st.slider("Number of recommendations", min_value=5, max_value=25, value=10)
+    n_recs = st.slider("Number of recommendations", min_value=1, max_value=25, value=1)
 
     if st.button("Get recommendations", type="primary"):
         weights_raw = [st.session_state.get(weight_key(m["movieId"]), 1.0) for m in st.session_state.selected]
