@@ -1,6 +1,13 @@
+# Movie Blender
 7/27/26
 Name: Michael Bachman
-Project: Movie Blender
+URL: https://movieblender.streamlit.app/
+
+## How it Works
+
+The recommendation model behind this website is a hybrid recommender that combines
+collaborative filtering and content-based recommendation to generate recs that are
+both similar to the input(s) and also likely to be enjoyed.
 
 Recommendations are made by averaging weighted vector embeddings of each movie
 and finding the N closest movies (by cosine similarity) to the resulting average
@@ -9,19 +16,22 @@ vector.
 Embeddings were created by training a latent-factor model with 50 factors. 
 Each movie's metadata was added to the embedding vector as well, by creating a countvectorized soup
 of the director (weighted 2x), writers, keywords (weighted 2x), and genres (weighted 7x). 
-Lastly, the popularity and average rating of each movie are added to the vector. 
+Lastly, the popularity (vote count on TMDB) and average rating of each movie are
+scaled and added to the vector. 
 
-Notes:
-- Used the MovieLens latest rating dataset, containing ~33,000,000 ratings. This
-dataset only has info on movies up to 2023, so all recent movies are not included
-in this project.
-- All other movie information was gathered from TMDB
+## Data sources
+
+- Ratings: MovieLens latest dataset (~33,000,000 ratings). This dataset
+  only has data up to 2023, so recent movies are not included.
+- Movie metadata: TMDB
+
+## Other Info
 
 This website is the result of my 2026 summer project. Other documentation on this
 project and my early experimentation with recommendation systems can be found at 
 these two notebooks:
 
-Intial Notebook:
+Initial Notebook:
 https://colab.research.google.com/drive/122Nx1q9xIRQCeUKvi98xsZrZ4rdLoV_B?authuser=3#scrollTo=D-XU3gn3mABo
 
 Movie Blender Notebook:
