@@ -22,12 +22,20 @@ st.markdown(
     div[data-testid="column"], div[data-testid="stColumn"] {
         min-width: 0 !important;
     }
+    a, a:visited, a:hover, a:active {
+        color: inherit !important;
+        text-decoration: none !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w200"
+
+
+def tmdb_movie_url(movie_id):
+    return f"https://www.themoviedb.org/movie/{movie_id}"
 
 
 @st.cache_resource
@@ -235,13 +243,17 @@ else:
 
         with poster_col:
             poster_url = get_poster_url(mid)
+            url = tmdb_movie_url(mid)
             if poster_url:
-                st.image(poster_url, width=60)
+                st.markdown(
+                    f'<a href="{url}" target="_blank"><img src="{poster_url}" width="60"></a>',
+                    unsafe_allow_html=True,
+                )
             else:
-                st.write("[POSTER MISSING]")
+                st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
 
         with content_col:
-            st.write(f"**{m['title']}**")
+            st.markdown(f"**[{m['title']}]({tmdb_movie_url(mid)})**")
             slider_col, num_col, remove_col = st.columns([3, 1.3, 0.6])
 
             with slider_col:
@@ -266,7 +278,6 @@ else:
             with remove_col:
                 st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
 
-    st.caption("Weights always add up to 1 — changing one automatically rebalances the others.")
 
     n_recs = st.slider("Number of recommendations", min_value=1, max_value=25, value=1)
 
@@ -329,10 +340,14 @@ else:
 
                         rec_poster_col, rec_text_col = st.columns([1, 5])
                         with rec_poster_col:
+                            url = tmdb_movie_url(raw_id)
                             if poster_url:
-                                st.image(poster_url, width=60)
+                                st.markdown(
+                                    f'<a href="{url}" target="_blank"><img src="{poster_url}" width="60"></a>',
+                                    unsafe_allow_html=True,
+                                )
                             else:
-                                st.write("[POSTER MISSING]")
+                                st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
                         with rec_text_col:
-                            st.write(f"**{title}**")
+                            st.markdown(f"**[{title}]({tmdb_movie_url(raw_id)})**")
                             st.caption(f"similarity: {score:.3f}")
