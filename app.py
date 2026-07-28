@@ -93,13 +93,20 @@ artifacts = load_artifacts()
 qi = artifacts["qi"]  # item factor matrix, shape (n_items, n_factors)
 raw_to_inner = artifacts["raw_to_inner"]
 inner_to_raw = artifacts["inner_to_raw"]
-title_to_id, id_to_title, all_titles = get_title_lookup(artifacts["movies_df"])  # values are "Title (Year)" labels
+
+# Only movies present in raw_to_inner actually have a vector — restrict the
+# searchable/addable list to those, so users can't pick a movie the model
+# has no embedding for.
+covered_ids = set(raw_to_inner.keys())
+movies_df_covered = artifacts["movies_df"][artifacts["movies_df"]["movieId"].isin(covered_ids)]
+
+title_to_id, id_to_title, all_titles = get_title_lookup(movies_df_covered)  # values are "Title (Year)" labels
 
 st.title("Movie Blender")
 st.write(
     "Everyone wants to watch something different on movie night? "
     "This website allows you to get movie recommendations from multiple input movies, making picking what to watch so much easier! "
-    "Select at least one movie to get started."
+    "Select at least one movie to get started. \n \n (NOTE: Data used for recommendations are limited, movies from 2023 and after are not included.)"
 )
 
 if not st.secrets.get("TMDB_API_KEY"):
@@ -277,7 +284,6 @@ else:
 
             with remove_col:
                 st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
-
 
     n_recs = st.slider("Number of recommendations", min_value=1, max_value=25, value=1)
 
