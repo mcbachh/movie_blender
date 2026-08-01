@@ -220,7 +220,7 @@ def search_movies(searchterm: str):
 # =========================================================================
 # Tabs
 # =========================================================================
-tab_blender, tab_about = st.tabs(["🎬 Movie Blender", "ℹ️ About"])
+tab_blender, tab_about = st.tabs(["Movie Blender", "About"])
 
 with tab_blender:
     st.title("Movie Blender")
@@ -404,6 +404,12 @@ from a 50-factor collaborative filtering model trained on historical user rating
 **ADDITIONAL SOURCES:** \n
 - GitHub: <a class="about-link" href="https://github.com/mcbachh/movie_blender" target="_blank">mcbachh/movie_blender</a>
 
+---- 
+**ABOUT ME:** \n
+This project was created by Michael Bachman, Data Science, Tufts '28 \n
+You can find more of my work on <a class="about-link" href="https://github.com/mcbachh" target="_blank">GitHub</a>. \n
+Connect on <a class="about-link" href="https://www.linkedin.com/in/michael-bachman-60655a344/" target="_blank">LinkedIn</a>. \n
+And follow me on Letterboxd (Username: mcbach) :)
 """
 
     with st.container(border=True):
