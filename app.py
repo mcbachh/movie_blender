@@ -26,6 +26,11 @@ st.markdown(
         color: inherit !important;
         text-decoration: none !important;
     }
+    /* Citation/source links in the About tab should look like normal links */
+    a.about-link, a.about-link:visited {
+        color: #1a73e8 !important;
+        text-decoration: underline !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -101,16 +106,6 @@ covered_ids = set(raw_to_inner.keys())
 movies_df_covered = artifacts["movies_df"][artifacts["movies_df"]["movieId"].isin(covered_ids)]
 
 title_to_id, id_to_title, all_titles = get_title_lookup(movies_df_covered)  # values are "Title (Year)" labels
-
-st.title("Movie Blender")
-st.write(
-    "Everyone wants to watch something different on movie night? "
-    "This website allows you to get movie recommendations from multiple input movies, making picking what to watch so much easier! "
-    "Select at least one movie to get started. \n \n (NOTE: Data used for recommendations are limited, movies from 2023 and after are not included.)"
-)
-
-if not st.secrets.get("TMDB_API_KEY"):
-    st.caption("ℹ️ No TMDB_API_KEY found in secrets — posters will be skipped. See README for setup.")
 
 if "selected" not in st.session_state:
     st.session_state.selected = []  # list of {"movieId": int, "title": str}
@@ -222,138 +217,194 @@ def search_movies(searchterm: str):
     return (starts + contains)[:MAX_MATCHES]
 
 
-selected_title = st_searchbox(
-    search_movies,
-    key="movie_searchbox",
-    placeholder="Start typing a title...",
-    label="Search for a movie to add",
-)
+# =========================================================================
+# Tabs
+# =========================================================================
+tab_blender, tab_about = st.tabs(["🎬 Movie Blender", "ℹ️ About"])
 
-if st.button("Add movie", disabled=not selected_title):
-    add_movie(selected_title)
-    st.session_state.pop("movie_searchbox", None)
-    st.rerun()
+with tab_blender:
+    st.title("Movie Blender")
+    st.write(
+        "Everyone wants to watch something different on movie night? "
+        "This website allows you to get movie recommendations from multiple input movies, making picking what to watch so much easier! "
+        "Select at least one movie to get started."
+    )
 
-st.divider()
+    if not st.secrets.get("TMDB_API_KEY"):
+        st.caption("ℹ️ No TMDB_API_KEY found in secrets — posters will be skipped. See README for setup.")
 
-# --- Tiles ---
-if not st.session_state.selected:
-    st.info("Add at least one movie to get started.")
-else:
-    st.subheader("Your movies")
-    for m in st.session_state.selected:
-        mid = m["movieId"]
-        if weight_key(mid) not in st.session_state:
-            set_weight(mid, 1.0)  # fallback, normally set by rebalance_weights
+    selected_title = st_searchbox(
+        search_movies,
+        key="movie_searchbox",
+        placeholder="Start typing a title...",
+        label="Search for a movie to add",
+    )
 
-        poster_col, content_col = st.columns([1, 4])
+    if st.button("Add movie", disabled=not selected_title):
+        add_movie(selected_title)
+        st.session_state.pop("movie_searchbox", None)
+        st.rerun()
 
-        with poster_col:
-            poster_url = get_poster_url(mid)
-            url = tmdb_movie_url(mid)
-            if poster_url:
-                st.markdown(
-                    f'<a href="{url}" target="_blank"><img src="{poster_url}" width="60"></a>',
-                    unsafe_allow_html=True,
-                )
+    st.divider()
+
+    # --- Tiles ---
+    if not st.session_state.selected:
+        st.info("Add at least one movie to get started.")
+    else:
+        st.subheader("Your movies")
+        for m in st.session_state.selected:
+            mid = m["movieId"]
+            if weight_key(mid) not in st.session_state:
+                set_weight(mid, 1.0)  # fallback, normally set by rebalance_weights
+
+            poster_col, content_col = st.columns([1, 4])
+
+            with poster_col:
+                poster_url = get_poster_url(mid)
+                url = tmdb_movie_url(mid)
+                if poster_url:
+                    st.markdown(
+                        f'<a href="{url}" target="_blank"><img src="{poster_url}" width="60"></a>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
+
+            with content_col:
+                st.markdown(f"**[{m['title']}]({tmdb_movie_url(mid)})**")
+                slider_col, num_col, remove_col = st.columns([3, 1.3, 0.6])
+
+                with slider_col:
+                    st.slider(
+                        f"Weight slider — {m['title']}",
+                        min_value=0.0, max_value=1.0, step=0.01,
+                        key=slider_key(mid),
+                        on_change=sync_from_slider, args=(mid,),
+                        label_visibility="collapsed",
+                    )
+                    st.caption("Adjust how much this movie will impact the recommendations.")
+
+                with num_col:
+                    st.number_input(
+                        f"Weight number — {m['title']}",
+                        min_value=0.0, max_value=1.0, step=0.01,
+                        key=number_key(mid),
+                        on_change=sync_from_number, args=(mid,),
+                        label_visibility="collapsed",
+                    )
+
+                with remove_col:
+                    st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
+
+        n_recs = st.slider("Number of recommendations", min_value=1, max_value=25, value=1)
+
+        if st.button("Get recommendations", type="primary"):
+            weights_raw = [st.session_state.get(weight_key(m["movieId"]), 1.0) for m in st.session_state.selected]
+            total_weight = sum(weights_raw)
+
+            if total_weight == 0:
+                st.error("At least one movie needs a non-zero weight.")
             else:
-                st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
+                input_inner_iids = []
+                vectors = []
+                weights = []
+                skipped = []
 
-        with content_col:
-            st.markdown(f"**[{m['title']}]({tmdb_movie_url(mid)})**")
-            slider_col, num_col, remove_col = st.columns([3, 1.3, 0.6])
+                for m, w in zip(st.session_state.selected, weights_raw):
+                    raw_id = m["movieId"]
+                    if raw_id not in raw_to_inner:
+                        skipped.append(m["title"])
+                        continue
+                    inner_iid = raw_to_inner[raw_id]
+                    input_inner_iids.append(inner_iid)
+                    row = qi[inner_iid]
+                    # qi may now be a sparse matrix (hybrid SVD + content vectors) —
+                    # densify just this one row; qi as a whole stays sparse below.
+                    if hasattr(row, "toarray"):
+                        row = row.toarray().ravel()
+                    vectors.append(row)
+                    weights.append(w / total_weight)
 
-            with slider_col:
-                st.slider(
-                    f"Weight slider — {m['title']}",
-                    min_value=0.0, max_value=1.0, step=0.01,
-                    key=slider_key(mid),
-                    on_change=sync_from_slider, args=(mid,),
-                    label_visibility="collapsed",
-                )
-                st.caption("Adjust how much this movie will impact the recommendations.")
+                if skipped:
+                    st.warning(f"Skipped (not enough ratings in training data): {', '.join(skipped)}")
 
-            with num_col:
-                st.number_input(
-                    f"Weight number — {m['title']}",
-                    min_value=0.0, max_value=1.0, step=0.01,
-                    key=number_key(mid),
-                    on_change=sync_from_number, args=(mid,),
-                    label_visibility="collapsed",
-                )
+                if not vectors:
+                    st.error("None of the selected movies have enough rating data to recommend from.")
+                else:
+                    vectors = np.array(vectors)
+                    weights = np.array(weights).reshape(-1, 1)
+                    weighted_avg = np.sum(vectors * weights, axis=0, keepdims=True)
 
-            with remove_col:
-                st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
+                    sims = cosine_similarity(weighted_avg, qi)[0]
+                    input_set = set(input_inner_iids)
 
-    n_recs = st.slider("Number of recommendations", min_value=1, max_value=25, value=1)
+                    ranked = sorted(
+                        (
+                            (score, inner_iid)
+                            for inner_iid, score in enumerate(sims)
+                            if inner_iid not in input_set
+                        ),
+                        key=lambda x: x[0],
+                        reverse=True,
+                    )[:n_recs]
 
-    if st.button("Get recommendations", type="primary"):
-        weights_raw = [st.session_state.get(weight_key(m["movieId"]), 1.0) for m in st.session_state.selected]
-        total_weight = sum(weights_raw)
+                    st.subheader("Recommendations")
+                    with st.spinner("Loading posters..."):
+                        for score, inner_iid in ranked:
+                            raw_id = inner_to_raw[inner_iid]
+                            title = id_to_title.get(raw_id, f"TMDB ID {raw_id}")
+                            poster_url = get_poster_url(raw_id)
 
-        if total_weight == 0:
-            st.error("At least one movie needs a non-zero weight.")
-        else:
-            input_inner_iids = []
-            vectors = []
-            weights = []
-            skipped = []
+                            rec_poster_col, rec_text_col = st.columns([1, 5])
+                            with rec_poster_col:
+                                url = tmdb_movie_url(raw_id)
+                                if poster_url:
+                                    st.markdown(
+                                        f'<a href="{url}" target="_blank"><img src="{poster_url}" width="60"></a>',
+                                        unsafe_allow_html=True,
+                                    )
+                                else:
+                                    st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
+                            with rec_text_col:
+                                st.markdown(f"**[{title}]({tmdb_movie_url(raw_id)})**")
+                                st.caption(f"similarity: {score:.3f}")
 
-            for m, w in zip(st.session_state.selected, weights_raw):
-                raw_id = m["movieId"]
-                if raw_id not in raw_to_inner:
-                    skipped.append(m["title"])
-                    continue
-                inner_iid = raw_to_inner[raw_id]
-                input_inner_iids.append(inner_iid)
-                row = qi[inner_iid]
-                # qi may now be a sparse matrix (hybrid SVD + content vectors) —
-                # densify just this one row; qi as a whole stays sparse below.
-                if hasattr(row, "toarray"):
-                    row = row.toarray().ravel()
-                vectors.append(row)
-                weights.append(w / total_weight)
+with tab_about:
+    st.title("About")
 
-            if skipped:
-                st.warning(f"Skipped (not enough ratings in training data): {', '.join(skipped)}")
+    # Edit ABOUT_TEXT below to update the about page. It's rendered as Markdown
+    # with unsafe_allow_html=True, so headers (##), **bold**, *italics*, and raw
+    # <a> tags all work. Use class="about-link" on any <a> tag that should look
+    # like a normal blue/underlined link (see the CSS block near the top of the
+    # file) — plain markdown [text](url) links stay unstyled like the rest of
+    # the site's links.
+    ABOUT_TEXT = """
+**THE IDEA:** \n   
+This website was created in summer 2026 as the culmination of a project that I started to get introduced
+ to recommendation systems. I'm a big movie fan and wanted to create a model that could give decent movie recommendations
+ based on an input movie to help me expand my watchlist. After experimenting with different approaches, I found that
+ that combining collaborative filtering with content-based features gave the best results for generating recommendations that
+ both relevant and unique. At that point, I thought of an idea I had come up with years ago for a system that could blend two songs together
+ to recommend new songs that are similar to a combination of the inputs. I realized I could apply the same idea to movies, blending multiple 
+ input movies to generate recommendations that reflect a combination of the selected movies. This led to the creation of the Movie Blender website.
 
-            if not vectors:
-                st.error("None of the selected movies have enough rating data to recommend from.")
-            else:
-                vectors = np.array(vectors)
-                weights = np.array(weights).reshape(-1, 1)
-                weighted_avg = np.sum(vectors * weights, axis=0, keepdims=True)
+----
+**HOW IT WORKS:** \n
+The basic concept behind the Movie Blender is that it averages vector embeddings of the input movies to create a combined vector in space,
+ and then finds movies closest to that combined vector, effectively recommending movies that are similar to the combination of the input movies.
+ The embeddings consider factors like genre, director, keywords, and popularity, among other features. The vector also includes the embeddings found
+from a 50-factor collaborative filtering model trained on historical user ratings, which captures hidden relationships between movies.
 
-                sims = cosine_similarity(weighted_avg, qi)[0]
-                input_set = set(input_inner_iids)
+----
+**CITATIONS:** \n
+- Ratings Dataset: <a class="about-link" href="https://grouplens.org/datasets/movielens/latest/" target="_blank">MovieLens Latest Full Dataset</a>
+- Movie Data: <a class="about-link" href="https://www.themoviedb.org/" target="_blank">TMDB</a>
+    - (This product uses the TMDB API but is not endorsed or certified by TMDB.)
+----
+**ADDITIONAL SOURCES:** \n
+- GitHub: <a class="about-link" href="https://github.com/mcbachh/movie_blender" target="_blank">mcbachh/movie_blender</a>
 
-                ranked = sorted(
-                    (
-                        (score, inner_iid)
-                        for inner_iid, score in enumerate(sims)
-                        if inner_iid not in input_set
-                    ),
-                    key=lambda x: x[0],
-                    reverse=True,
-                )[:n_recs]
+"""
 
-                st.subheader("Recommendations")
-                with st.spinner("Loading posters..."):
-                    for score, inner_iid in ranked:
-                        raw_id = inner_to_raw[inner_iid]
-                        title = id_to_title.get(raw_id, f"TMDB ID {raw_id}")
-                        poster_url = get_poster_url(raw_id)
-
-                        rec_poster_col, rec_text_col = st.columns([1, 5])
-                        with rec_poster_col:
-                            url = tmdb_movie_url(raw_id)
-                            if poster_url:
-                                st.markdown(
-                                    f'<a href="{url}" target="_blank"><img src="{poster_url}" width="60"></a>',
-                                    unsafe_allow_html=True,
-                                )
-                            else:
-                                st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
-                        with rec_text_col:
-                            st.markdown(f"**[{title}]({tmdb_movie_url(raw_id)})**")
-                            st.caption(f"similarity: {score:.3f}")
+    with st.container(border=True):
+        st.markdown(ABOUT_TEXT, unsafe_allow_html=True)
