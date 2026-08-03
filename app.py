@@ -91,7 +91,7 @@ st.markdown(
     .marquee-title {
         font-family: 'Cinzel', serif;
         color: #ffe89e;
-        font-size: 3.5rem;
+        font-size: 3.1rem;
         font-weight: 900;
         letter-spacing: 8px;
         text-transform: uppercase;
@@ -314,10 +314,10 @@ st.markdown(
         background: linear-gradient(180deg, #520b10 0%, #290507 100%);
         border: 2px solid #d4af37;
         color: #ffe27a;
-        font-size: 1.3rem;
+        font-size: 0.8rem;
         font-weight: 900;
-        width: 42px;
-        height: 42px;
+        width: 35px;
+        height: 35px;
         border-radius: 50%;
         display: flex;
         align-items: center;
