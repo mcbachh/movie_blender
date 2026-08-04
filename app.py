@@ -551,7 +551,7 @@ def search_movies(searchterm: str):
 st.markdown(
     """<div class="marquee-header">
         <div class="marquee-title">MOVIE BLENDER</div>
-        <div class="marquee-subtitle">Blend movies into one perfect recommendation</div>
+        <div class="marquee-subtitle">Blend movies into a list of perfect recommendations</div>
     </div>""",
     unsafe_allow_html=True,
 )
@@ -565,7 +565,9 @@ with tab_blender:
     st.write(
         "Everyone wants to watch something different on movie night? "
         "This website allows you to get movie recommendations from multiple input movies, making picking what to watch so much easier! "
-        "Select at least one movie to get started."
+        "Select at least one movie to get started. \n \n" 
+        "(NOTE: Due to limited data, only movies from 2023 and before are available. "
+        "Movies released during 2023 may have low quality recommendations because of poor rating coverage.)"
     )
 
     if not st.secrets.get("TMDB_API_KEY"):
