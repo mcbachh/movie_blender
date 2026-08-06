@@ -6,6 +6,15 @@ import requests
 from sklearn.metrics.pairwise import cosine_similarity
 from streamlit_searchbox import st_searchbox
 
+# Hide the Streamlit header, main menu, and footer completely
+hide_header_style = """
+    <style>
+    header[data-testid="stHeader"] {visibility: hidden; height: 0rem;}
+    div.block-container {padding-top: 1rem;}
+    </style>
+"""
+st.markdown(hide_header_style, unsafe_allow_html=True)
+
 st.set_page_config(page_title="Movie Blender", page_icon="🎬", layout="wide")
 
 # Force columns to stay side-by-side at any screen width (mobile & desktop)
@@ -32,7 +41,14 @@ st.markdown(
         text-decoration: underline !important;
         font-weight: bold;
     }
-    
+
+    /* Keep the "screen" of content contained even though the theater
+       background spans the full wide layout */
+    .block-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
     /* -------------------------------------------------------------
        THEATER BACKGROUND: Rich Velvet Red Felt & Dark Vignette
        ------------------------------------------------------------- */
@@ -191,6 +207,31 @@ st.markdown(
         border-radius: 14px !important;
         padding: 1.5rem !important;
         box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 4px 15px rgba(0,0,0,0.6) !important;
+    }
+
+    /* Movie tile cards specifically: a touch tighter than the general
+       card padding above, and a subtle gold-glow hover to feel interactive */
+    .movie-tile div[data-testid="stVerticalBlockBorderWrapper"] {
+        padding: 1rem 1.25rem !important;
+        transition: box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
+    }
+    .movie-tile div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #ffd700 !important;
+        box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 0 18px rgba(255, 215, 0, 0.25) !important;
+    }
+    .movie-tile img {
+        transition: transform 0.2s ease;
+    }
+    .movie-tile img:hover {
+        transform: scale(1.04);
+    }
+
+    /* Keep the weight controls from sprawling across the wide layout */
+    div[data-testid="stNumberInput"] {
+        max-width: 110px;
+    }
+    div[data-testid="stHorizontalBlock"] {
+        gap: 0.6rem;
     }
 
     /* -------------------------------------------------------------
@@ -366,6 +407,12 @@ st.markdown(
     .stButton button[kind="primary"]:hover {
         background: linear-gradient(180deg, #d9252e 0%, #821217 100%) !important;
         box-shadow: 0 0 20px rgba(255, 0, 0, 0.6), 0 0 10px rgba(255, 215, 0, 0.8) !important;
+    }
+
+    /* Movie tile remove (✕) button: smaller and square instead of stretching wide */
+    .movie-tile .remove-btn-col .stButton button {
+        padding: 0.5rem 0.9rem !important;
+        min-width: unset !important;
     }
 
     /* Headers typography */
@@ -596,44 +643,49 @@ with tab_blender:
             if weight_key(mid) not in st.session_state:
                 set_weight(mid, 1.0)
 
-            poster_col, content_col = st.columns([1, 4])
+            st.markdown('<div class="movie-tile">', unsafe_allow_html=True)
+            with st.container(border=True):
+                poster_col, content_col = st.columns([1, 4])
 
-            with poster_col:
-                poster_url = get_poster_url(mid)
-                url = tmdb_movie_url(mid)
-                if poster_url:
-                    st.markdown(
-                        f'<a href="{url}" target="_blank"><img src="{poster_url}" width="65" style="border: 2px solid #d4af37; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.8);"></a>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
+                with poster_col:
+                    poster_url = get_poster_url(mid)
+                    url = tmdb_movie_url(mid)
+                    if poster_url:
+                        st.markdown(
+                            f'<a href="{url}" target="_blank"><img src="{poster_url}" width="65" style="border: 2px solid #d4af37; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.8);"></a>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(f'<a href="{url}" target="_blank">[POSTER MISSING]</a>', unsafe_allow_html=True)
 
-            with content_col:
-                st.markdown(f"**[{m['title']}]({tmdb_movie_url(mid)})**")
-                slider_col, num_col, remove_col = st.columns([3, 1.3, 0.6])
+                with content_col:
+                    st.markdown(f"**[{m['title']}]({tmdb_movie_url(mid)})**")
+                    slider_col, num_col, remove_col = st.columns([3, 1, 0.7])
 
-                with slider_col:
-                    st.slider(
-                        f"Weight slider — {m['title']}",
-                        min_value=0.0, max_value=1.0, step=0.01,
-                        key=slider_key(mid),
-                        on_change=sync_from_slider, args=(mid,),
-                        label_visibility="collapsed",
-                    )
-                    st.caption("Adjust how much this movie will impact the recommendations.")
+                    with slider_col:
+                        st.slider(
+                            f"Weight slider — {m['title']}",
+                            min_value=0.0, max_value=1.0, step=0.01,
+                            key=slider_key(mid),
+                            on_change=sync_from_slider, args=(mid,),
+                            label_visibility="collapsed",
+                        )
+                        st.caption("Adjust how much this movie will impact the recommendations.")
 
-                with num_col:
-                    st.number_input(
-                        f"Weight number — {m['title']}",
-                        min_value=0.0, max_value=1.0, step=0.01,
-                        key=number_key(mid),
-                        on_change=sync_from_number, args=(mid,),
-                        label_visibility="collapsed",
-                    )
+                    with num_col:
+                        st.number_input(
+                            f"Weight number — {m['title']}",
+                            min_value=0.0, max_value=1.0, step=0.01,
+                            key=number_key(mid),
+                            on_change=sync_from_number, args=(mid,),
+                            label_visibility="collapsed",
+                        )
 
-                with remove_col:
-                    st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
+                    with remove_col:
+                        st.markdown('<div class="remove-btn-col">', unsafe_allow_html=True)
+                        st.button("✕", key=f"remove_{mid}", on_click=remove_movie, args=(mid,))
+                        st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
         n_recs = st.slider("Number of recommendations", min_value=1, max_value=25, value=1)
 
@@ -751,27 +803,30 @@ with tab_about:
     st.title("About")
 
     ABOUT_TEXT = """
-**THE IDEA:** \n   
+**THE BLENDER:** \n   
 This website was created in summer 2026 as the culmination of a project that I started to get introduced
  to recommendation systems. I'm a big movie fan and wanted to create a model that could give decent movie recommendations
- based on an input movie to help me expand my watchlist. After experimenting with different approaches, I found that
- combining collaborative filtering with content-based features gave the best results for generating recommendations that
- are both relevant and unique. At that point, I thought of an idea I had come up with years ago for a system that could blend two songs together
+ based on an input movie to help me expand my watchlist. I wanted to generate recommendations that were both relevant and unique. 
+ I created a model that would give decent recs for one movie pretty quickly, and enjoyed playing around with it. \n \n
+ At that point, I thought of an idea I had come up with years ago for a system that could blend two songs together
  to recommend new songs that are similar to a combination of the inputs. I realized I could apply the same idea to movies, blending multiple 
  input movies to generate recommendations that reflect a combination of the selected movies. This led to the creation of the Movie Blender website.
 
 ----
 **HOW IT WORKS:** \n
-The basic concept behind the Movie Blender is that it averages vector embeddings of the input movies to create a combined vector in space,
- and then finds movies closest to that combined vector, effectively recommending movies that are similar to the combination of the input movies.
- The embeddings consider factors like genre, director, keywords, and popularity, among other features. The vector also includes the embeddings found
-from a 50-factor collaborative filtering model trained on historical user ratings, which captures hidden relationships between movies.
+The main concept behind the Movie Blender is turning every movie into a vector, so that you can find the mathematical average _of movies_. 
+ Vector embeddings were created for each movie based on factors like genre, director, keywords, and popularity, among other features.
+ The vector also includes the embeddings found from a latent factor model trained on historical user ratings, which 
+ captures hidden relationships between movies. \n \n
+ Once every movie has been turned into a vector, recs are found by averaging all of the input movie vectors together, and finding the closest movies
+ to the result. Movies can be weighted in the average as well for more customization.
 
 ----
 **CITATIONS:** \n
 - Ratings Dataset: <a class="about-link" href="https://grouplens.org/datasets/movielens/latest/" target="_blank">MovieLens Latest Full Dataset</a>
 - Movie Data: <a class="about-link" href="https://www.themoviedb.org/" target="_blank">TMDB</a>
     - (This product uses the TMDB API but is not endorsed or certified by TMDB.)
+- Website hosted on Streamlit
 ----
 **ADDITIONAL SOURCES:** \n
 - GitHub: <a class="about-link" href="https://github.com/mcbachh/movie_blender" target="_blank">mcbachh/movie_blender</a>
